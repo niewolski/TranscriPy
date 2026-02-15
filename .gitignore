@@ -42,6 +42,10 @@ Thumbs.db
 *_temp_audio.wav
 *.log
 
+# app uploads and outputs
+uploads/
+outputs/
+
 # test files
 .pytest_cache/
 .coverage
