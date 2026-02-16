@@ -12,8 +12,8 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -23,17 +23,17 @@
         
         .container {
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid #ddd;
             padding: 40px;
             max-width: 600px;
             width: 100%;
         }
         
         h1 {
-            color: #333;
+            color: #000;
             margin-bottom: 10px;
             text-align: center;
+            font-size: 24px;
         }
         
         .subtitle {
@@ -44,38 +44,37 @@
         }
         
         .upload-area {
-            border: 3px dashed #667eea;
-            border-radius: 10px;
+            border: 2px dashed #999;
             padding: 40px;
             text-align: center;
-            background: #f8f9ff;
-            transition: all 0.3s;
+            background: #fafafa;
             cursor: pointer;
         }
         
         .upload-area:hover {
-            background: #f0f2ff;
-            border-color: #764ba2;
+            background: #f0f0f0;
+            border-color: #666;
         }
         
         .upload-area.dragover {
-            background: #e8ebff;
-            border-color: #764ba2;
+            background: #e8e8e8;
+            border-color: #333;
         }
         
         .upload-icon {
-            font-size: 48px;
+            font-size: 32px;
             margin-bottom: 15px;
+            color: #666;
         }
         
         .upload-text {
-            color: #667eea;
-            font-weight: 600;
+            color: #000;
+            font-weight: normal;
             margin-bottom: 5px;
         }
         
         .upload-hint {
-            color: #999;
+            color: #666;
             font-size: 12px;
         }
         
@@ -86,8 +85,8 @@
         .file-info {
             margin-top: 20px;
             padding: 15px;
-            background: #f0f2ff;
-            border-radius: 8px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
             display: none;
         }
         
@@ -96,8 +95,8 @@
         }
         
         .file-name {
-            font-weight: 600;
-            color: #333;
+            font-weight: normal;
+            color: #000;
             margin-bottom: 5px;
         }
         
@@ -110,14 +109,12 @@
             width: 100%;
             padding: 15px;
             margin-top: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000;
             color: white;
-            border: none;
-            border-radius: 8px;
+            border: 1px solid #000;
             font-size: 16px;
-            font-weight: 600;
+            font-weight: normal;
             cursor: pointer;
-            transition: transform 0.2s;
             display: none;
         }
         
@@ -126,12 +123,11 @@
         }
         
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            background: #333;
         }
         
         .btn:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
         }
         
@@ -146,8 +142,8 @@
         }
         
         .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+            border: 3px solid #ddd;
+            border-top: 3px solid #000;
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -161,10 +157,10 @@
         }
         
         .error {
-            background: #fee;
-            color: #c33;
+            background: #f5f5f5;
+            color: #000;
             padding: 15px;
-            border-radius: 8px;
+            border: 1px solid #ddd;
             margin-top: 20px;
             display: none;
         }
@@ -174,10 +170,10 @@
         }
         
         .success {
-            background: #efe;
-            color: #3c3;
+            background: #f5f5f5;
+            color: #000;
             padding: 15px;
-            border-radius: 8px;
+            border: 1px solid #ddd;
             margin-top: 20px;
             display: none;
         }
@@ -185,16 +181,21 @@
         .success.show {
             display: block;
         }
+        
+        .success a {
+            color: #000;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎙️ TranscriPy</h1>
+        <h1>TranscriPy</h1>
         <p class="subtitle">convert your audio and video files to text</p>
         
         <form id="uploadForm" enctype="multipart/form-data">
             <div class="upload-area" id="uploadArea">
-                <div class="upload-icon">📁</div>
+                <div class="upload-icon">upload</div>
                 <div class="upload-text">click to upload or drag and drop</div>
                 <div class="upload-hint">supports: MP3, MP4, WAV, M4A (max 500MB)</div>
                 <input type="file" id="fileInput" name="file" accept=".mp3,.mp4,.wav,.m4a" required>
@@ -296,7 +297,7 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    success.innerHTML = `✓ transcription complete! <a href="/download/${data.filename}" style="color: #3c3; text-decoration: underline;">download text file</a>`;
+                    success.innerHTML = `transcription complete! <a href="/download/${data.filename}">download text file</a>`;
                     success.classList.add('show');
                 } else {
                     error.textContent = data.error || 'an error occurred';
