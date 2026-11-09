@@ -28,6 +28,14 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
     parser.add_argument("--language", help="ISO language code, for example pl")
     parser.add_argument("--model", default="small", help="Whisper model name")
     parser.add_argument("--device", default="cpu", help="cpu or cuda")
+    parser.add_argument("--prompt", help="words the recording is likely to contain")
+    parser.add_argument("--hotwords", help="names or phrases to bias recognition toward")
+    parser.add_argument(
+        "--pause",
+        type=float,
+        default=1.0,
+        help="seconds of silence that start a new utterance",
+    )
     parser.add_argument(
         "--format",
         choices=_FORMATS,
@@ -35,11 +43,28 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.pause < 0:
+        print("pause must be >= 0", file=sys.stderr)
+        return 1
+
     try:
         output_format = choose_format(args.output, args.format)
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 1
+
+    reported = False
+
+    def on_progress(fraction: float, segments_done: int) -> None:
+        nonlocal reported
+        reported = True
+        percent = int(round(min(max(fraction, 0.0), 1.0) * 100))
+        print(
+            f"\r{percent:3d}%  {segments_done} segments",
+            file=sys.stderr,
+            end="",
+            flush=True,
+        )
 
     try:
         result = transcriber(
@@ -47,12 +72,19 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
             model=args.model,
             language=args.language,
             device=args.device,
+            initial_prompt=args.prompt,
+            hotwords=args.hotwords,
+            on_progress=on_progress,
         )
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, RuntimeError) as exc:
+        if reported:
+            print(file=sys.stderr)
         print(exc, file=sys.stderr)
         return 1
+    if reported:
+        print(file=sys.stderr)
 
-    rendered = render(result, output_format)
+    rendered = render(result, output_format, args.pause)
     if args.output is None:
         sys.stdout.write(rendered)
         return 0
@@ -82,7 +114,7 @@ def choose_format(output: str | None, explicit: str | None) -> str:
     )
 
 
-def render(result: Transcript, output_format: str) -> str:
+def render(result: Transcript, output_format: str, pause: float = 1.0) -> str:
     """Turn a transcript into the text that should be stored."""
     if output_format == "txt":
         if not result.text or result.text.endswith("\n"):
@@ -93,7 +125,7 @@ def render(result: Transcript, output_format: str) -> str:
     if output_format == "vtt":
         return result.to_vtt()
     if output_format == "json":
-        return json.dumps(result.to_dict(), ensure_ascii=False, indent=2) + "\n"
+        return json.dumps(result.to_dict(pause=pause), ensure_ascii=False, indent=2) + "\n"
     raise ValueError(f"unsupported format: {output_format}")
 
 

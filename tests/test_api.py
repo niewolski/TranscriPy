@@ -25,12 +25,17 @@ class RecordingTranscriber:
         device: str = "cpu",
         compute_type: str | None = None,
         engine: object | None = None,
+        initial_prompt: str | None = None,
+        hotwords: str | None = None,
+        on_progress=None,
     ) -> Transcript:
         self.source = Path(source)
         assert self.source.is_file()
         self.model = model
         self.language = language
         self.device = device
+        self.initial_prompt = initial_prompt
+        self.hotwords = hotwords
         return Transcript.from_segments(
             [Segment(0.0, 1.5, "cześć")],
             language=language or "pl",
@@ -55,6 +60,7 @@ def test_transcribe_upload_returns_json(monkeypatch):
         "language": "pl",
         "duration": 1.5,
         "segments": [{"start": 0.0, "end": 1.5, "text": "cześć"}],
+        "turns": [{"start": 0.0, "end": 1.5, "text": "cześć"}],
     }
     assert recorder.model == "tiny"
     assert recorder.language == "pl"
@@ -106,11 +112,15 @@ def test_unknown_format_is_rejected():
 
 def test_job_returns_before_transcription_finishes(monkeypatch):
     release = threading.Event()
+    reported = threading.Event()
     recorder = RecordingTranscriber()
 
-    def slow(*args, **kwargs):
+    def slow(*args, on_progress=None, **kwargs):
+        if on_progress is not None:
+            on_progress(0.4, 2)
+        reported.set()
         release.wait(2)
-        return recorder(*args, **kwargs)
+        return recorder(*args, on_progress=on_progress, **kwargs)
 
     monkeypatch.setattr("api.routes.jobs", JobStore(slow))
     client = TestClient(app)
@@ -124,7 +134,11 @@ def test_job_returns_before_transcription_finishes(monkeypatch):
     assert response.status_code == 202
     job_id = response.json()["id"]
     assert response.json()["status"] == "queued"
-    assert client.get(f"/api/v1/jobs/{job_id}").json()["status"] in {"queued", "running"}
+    assert reported.wait(2)
+    running = client.get(f"/api/v1/jobs/{job_id}").json()
+    assert running["status"] == "running"
+    assert running["progress"] == 0.4
+    assert running["segments_done"] == 2
     assert client.get(f"/api/v1/jobs/{job_id}/result").status_code == 409
 
     release.set()
@@ -132,6 +146,8 @@ def test_job_returns_before_transcription_finishes(monkeypatch):
 
     assert finished["status"] == "done"
     assert finished["error"] is None
+    assert finished["progress"] == 1.0
+    assert finished["segments_done"] == 1
     result = client.get(f"/api/v1/jobs/{job_id}/result")
     assert result.status_code == 200
     assert result.text == "1\n00:00:00,000 --> 00:00:01,500\ncześć\n"

@@ -19,12 +19,20 @@ class SegmentResponse(BaseModel):
     text: str
 
 
+class TurnResponse(BaseModel):
+    """utterance made of one or more segments"""
+    start: float
+    end: float
+    text: str
+
+
 class TranscriptResponse(BaseModel):
     """transcription returned by the api"""
     text: str
     language: str
     duration: float
     segments: list[SegmentResponse]
+    turns: list[TurnResponse]
 
 
 class JobCreatedResponse(BaseModel):
@@ -38,4 +46,6 @@ class JobStatusResponse(BaseModel):
     id: str
     status: str
     error: str | None = None
+    progress: float = 0.0
+    segments_done: int = 0
 

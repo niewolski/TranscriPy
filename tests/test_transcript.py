@@ -78,7 +78,28 @@ def test_to_dict():
             {"start": 0.0, "end": 1.5, "text": "dzień dobry"},
             {"start": 3.0, "end": 4.25, "text": "tu voicebot"},
         ],
+        "turns": [
+            {"start": 0.0, "end": 1.5, "text": "dzień dobry"},
+            {"start": 3.0, "end": 4.25, "text": "tu voicebot"},
+        ],
     }
+
+
+def test_turns_follow_the_pause():
+    transcript = Transcript.from_segments(
+        [
+            Segment(0.0, 1.0, "dzień dobry"),
+            Segment(1.4, 2.0, "tu voicebot"),
+            Segment(4.0, 5.0, "do widzenia"),
+        ],
+        language="pl",
+    )
+
+    assert transcript.turns(1.0)[0].text == "dzień dobry tu voicebot"
+    assert transcript.turns(1.0)[1].text == "do widzenia"
+    assert len(transcript.turns(3.0)) == 1
+    with pytest.raises(ValueError):
+        transcript.turns(-0.1)
 
 
 def test_format_timestamp_over_an_hour():

@@ -18,8 +18,15 @@ class Job:
     id: str
     status: str
     output_format: str
+    model: str
+    language: str | None
+    device: str
+    initial_prompt: str | None = None
+    hotwords: str | None = None
     error: str | None = None
     result: Transcript | None = None
+    progress: float = 0.0
+    segments_done: int = 0
 
 
 class JobStore:
@@ -41,13 +48,24 @@ class JobStore:
         language: str | None,
         device: str,
         output_format: str,
+        initial_prompt: str | None = None,
+        hotwords: str | None = None,
     ) -> Job:
-        job = Job(id=uuid.uuid4().hex, status="queued", output_format=output_format)
+        job = Job(
+            id=uuid.uuid4().hex,
+            status="queued",
+            output_format=output_format,
+            model=model,
+            language=language,
+            device=device,
+            initial_prompt=initial_prompt,
+            hotwords=hotwords,
+        )
         with self._lock:
             self._jobs[job.id] = job
         thread = threading.Thread(
             target=self._run,
-            args=(job.id, source, model, language, device),
+            args=(job.id, source),
             daemon=True,
         )
         thread.start()
@@ -62,25 +80,36 @@ class JobStore:
                 id=job.id,
                 status=job.status,
                 output_format=job.output_format,
+                model=job.model,
+                language=job.language,
+                device=job.device,
+                initial_prompt=job.initial_prompt,
+                hotwords=job.hotwords,
                 error=job.error,
                 result=job.result,
+                progress=job.progress,
+                segments_done=job.segments_done,
             )
 
-    def _run(
-        self,
-        job_id: str,
-        source: Path,
-        model: str,
-        language: str | None,
-        device: str,
-    ) -> None:
+    def _run(self, job_id: str, source: Path) -> None:
+        job = self.get(job_id)
+        if job is None:
+            source.unlink(missing_ok=True)
+            return
         self._mark(job_id, status="running")
         try:
             result = self._transcriber(
                 source,
-                model=model,
-                language=language,
-                device=device,
+                model=job.model,
+                language=job.language,
+                device=job.device,
+                initial_prompt=job.initial_prompt,
+                hotwords=job.hotwords,
+                on_progress=lambda fraction, count: self._set_progress(
+                    job_id,
+                    fraction,
+                    count,
+                ),
             )
         except Exception as exc:
             self._mark(job_id, status="failed", error=str(exc))
@@ -88,6 +117,12 @@ class JobStore:
             self._mark(job_id, status="done", result=result)
         finally:
             source.unlink(missing_ok=True)
+
+    def _set_progress(self, job_id: str, fraction: float, segments_done: int) -> None:
+        with self._lock:
+            job = self._jobs[job_id]
+            job.progress = min(max(float(fraction), 0.0), 1.0)
+            job.segments_done = segments_done
 
     def _mark(
         self,
@@ -102,3 +137,6 @@ class JobStore:
             job.status = status
             job.error = error
             job.result = result
+            if status == "done" and result is not None:
+                job.progress = 1.0
+                job.segments_done = len(result.segments)

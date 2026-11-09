@@ -21,6 +21,15 @@ class Segment:
 
 
 @dataclass(frozen=True)
+class Turn:
+    """Consecutive segments spoken close together."""
+
+    start: float
+    end: float
+    text: str
+
+
+@dataclass(frozen=True)
 class Transcript:
     """Full transcription of one recording."""
 
@@ -60,7 +69,28 @@ class Transcript:
             segments=tuple(cleaned),
         )
 
-    def to_dict(self) -> dict[str, object]:
+    def turns(self, pause: float = 1.0) -> tuple[Turn, ...]:
+        """Group segments into utterances separated by at least ``pause`` seconds."""
+        if pause < 0:
+            raise ValueError("pause must be >= 0")
+
+        grouped: list[list[Segment]] = []
+        for segment in self.segments:
+            gap = segment.start - grouped[-1][-1].end if grouped else pause
+            if gap >= pause:
+                grouped.append([])
+            grouped[-1].append(segment)
+
+        return tuple(
+            Turn(
+                start=segments[0].start,
+                end=segments[-1].end,
+                text=" ".join(segment.text for segment in segments),
+            )
+            for segments in grouped
+        )
+
+    def to_dict(self, *, pause: float = 1.0) -> dict[str, object]:
         return {
             "text": self.text,
             "language": self.language,
@@ -68,6 +98,10 @@ class Transcript:
             "segments": [
                 {"start": segment.start, "end": segment.end, "text": segment.text}
                 for segment in self.segments
+            ],
+            "turns": [
+                {"start": turn.start, "end": turn.end, "text": turn.text}
+                for turn in self.turns(pause)
             ],
         }
 

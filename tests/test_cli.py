@@ -23,11 +23,18 @@ class RecordingTranscriber:
         device: str = "cpu",
         compute_type: str | None = None,
         engine: object | None = None,
+        initial_prompt: str | None = None,
+        hotwords: str | None = None,
+        on_progress=None,
     ) -> Transcript:
         self.source = source
         self.model = model
         self.language = language
         self.device = device
+        self.initial_prompt = initial_prompt
+        self.hotwords = hotwords
+        if on_progress is not None and self.initial_prompt:
+            on_progress(0.5, 1)
         return Transcript.from_segments(
             [Segment(0.0, 1.5, "cześć")],
             language=language or "pl",
@@ -114,6 +121,22 @@ def test_missing_file_returns_an_error(tmp_path: Path, capsys):
     assert code == 1
     assert not destination.exists()
     assert "not found" in capsys.readouterr().err
+
+
+def test_prompt_is_forwarded_and_progress_is_printed(tmp_path: Path, capsys):
+    source = tmp_path / "call.mp3"
+    source.write_bytes(b"audio")
+    recorder = RecordingTranscriber()
+
+    code = main(
+        [str(source), "--prompt", "TranscriPy", "--hotwords", "Niewolski"],
+        transcriber=recorder,
+    )
+
+    assert code == 0
+    assert recorder.initial_prompt == "TranscriPy"
+    assert recorder.hotwords == "Niewolski"
+    assert "50%  1 segments" in capsys.readouterr().err
 
 
 def test_module_help_runs():
