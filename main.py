@@ -7,7 +7,7 @@ from models.schemas import MessageResponse, HealthResponse
 app = FastAPI(
     title="TranscriPy",
     description="transcription service api",
-    version="1.0.0"
+    version="0.1.0"
 )
 
 # add cors middleware to allow frontend requests
