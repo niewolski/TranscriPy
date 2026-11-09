@@ -1,0 +1,26 @@
+[project]
+name = "transcripy"
+version = "0.1.0"
+description = "Transcribe voicebot calls, audio files, and video soundtracks."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Bartosz Niewolski" }]
+dependencies = ["faster-whisper==1.2.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27,<0.28"]
+diarize = ["pyannote.audio>=3.3"]
+
+[project.scripts]
+transcripy = "transcripy.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["transcripy*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
