@@ -2,7 +2,7 @@
 
 Thanks for your interest in the project. Bug reports, ideas, documentation fixes, and code changes are all welcome.
 
-TranscriPy is a Python library and command-line tool for local transcription of voicebot calls, audio files, and video soundtracks (mp3, mp4, wav, and more).
+TranscriPy is a Python library and CLI for local transcription of voicebot calls and phone recordings into timed speaker turns.
 
 ## Reporting bugs
 
@@ -12,7 +12,7 @@ TranscriPy is a Python library and command-line tool for local transcription of 
 
 ## Feature requests
 
-Have an idea for a new feature? Open an issue using the **Feature request** template and describe the problem it should solve.
+Have an idea for a new feature? Open an issue using the **Feature request** template and describe the problem it should solve. Please check the README non-goals for 1.0 first.
 
 ## Pull requests
 
@@ -40,6 +40,8 @@ For speaker diarization support, also install the optional extra:
 ```bash
 pip install -e ".[diarize]"
 ```
+
+The FastAPI app under `api/` / `main.py` is experimental and not part of the published 1.0 wheel. Install `.[dev]` (or `.[server]`) if you need to run those tests.
 
 ## Code of Conduct
 

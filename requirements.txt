@@ -1,4 +1,4 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-faster-whisper==1.2.1
+# Local development convenience. Prefer: pip install -e ".[dev]"
+# The published wheel depends only on faster-whisper (see pyproject.toml).
+
+-e ".[dev]"

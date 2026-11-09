@@ -4,8 +4,13 @@ from pathlib import Path
 import pytest
 
 from transcripy.diarize import SpeakerSpan
-from transcripy.models import Segment, Transcript
-from transcripy.transcribe import FasterWhisperEngine, default_compute_type, transcribe
+from transcripy.models import Segment, Transcript, Word
+from transcripy.transcribe import (
+    DEFAULT_MODEL,
+    FasterWhisperEngine,
+    default_compute_type,
+    transcribe,
+)
 
 
 class FakeEngine:
@@ -20,12 +25,14 @@ class FakeEngine:
         *,
         initial_prompt: str | None = None,
         hotwords: str | None = None,
+        word_timestamps: bool = True,
         on_progress=None,
     ) -> Transcript:
         self.source = source
         self.language = language
         self.initial_prompt = initial_prompt
         self.hotwords = hotwords
+        self.word_timestamps = word_timestamps
         return Transcript.from_segments(
             [Segment(0.0, 1.2, "cześć")],
             language=language or "pl",
@@ -97,9 +104,10 @@ def test_stereo_recording_labels_each_channel(tmp_path: Path, monkeypatch):
                 duration=segment.end,
             )
 
-    def fake_split(path: Path):
+    def fake_split(path: Path, labels=("left", "right")):
         assert path == source
-        return [("left", left), ("right", right)]
+        assert labels == ("agent", "customer")
+        return [("agent", left), ("customer", right)]
 
     monkeypatch.setattr(sys.modules["transcripy.transcribe"], "split_stereo", fake_split)
     engine = ChannelEngine()
@@ -108,19 +116,28 @@ def test_stereo_recording_labels_each_channel(tmp_path: Path, monkeypatch):
         source,
         language="pl",
         speakers=True,
+        channel_labels=("agent", "customer"),
         engine=engine,
         on_progress=lambda fraction, count: progress.append((fraction, count)),
     )
 
     assert [(segment.speaker, segment.text) for segment in result.segments] == [
-        ("right", "prawy"),
-        ("left", "lewy"),
+        ("customer", "prawy"),
+        ("agent", "lewy"),
     ]
-    assert result.turns(1.0)[0].speaker == "right"
+    assert result.turns(1.0)[0].speaker == "customer"
     assert engine.sources == [left, right]
     assert progress == [(0.5, 1), (1.0, 2)]
     assert not left.exists()
     assert not right.exists()
+
+
+def test_invalid_channel_labels_raise(tmp_path: Path):
+    audio = tmp_path / "call.wav"
+    audio.write_bytes(b"wav")
+
+    with pytest.raises(ValueError, match="channel_labels"):
+        transcribe(audio, speakers=True, channel_labels=("only",), engine=FakeEngine())
 
 
 def test_mono_recording_uses_the_diarizer(tmp_path: Path, monkeypatch):
@@ -131,7 +148,7 @@ def test_mono_recording_uses_the_diarizer(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
         sys.modules["transcripy.transcribe"],
         "split_stereo",
-        lambda path: None,
+        lambda path, labels=("left", "right"): None,
     )
 
     def diarizer(path: Path):
@@ -154,37 +171,52 @@ def test_prompt_and_hotwords_reach_the_engine(tmp_path: Path):
         engine=engine,
         initial_prompt="  TranscriPy  ",
         hotwords="Niewolski",
+        word_timestamps=False,
     )
 
     assert engine.initial_prompt == "TranscriPy"
     assert engine.hotwords == "Niewolski"
+    assert engine.word_timestamps is False
 
 
-def test_engine_reports_progress_and_deletes_extracted_audio(tmp_path: Path, monkeypatch):
+def test_engine_reports_progress_and_keeps_word_timings(tmp_path: Path, monkeypatch):
     source = tmp_path / "film.mp4"
     source.write_bytes(b"video")
     extracted = tmp_path / "extracted.wav"
     extracted.write_bytes(b"wav")
     progress = []
 
+    class FakeWord:
+        def __init__(self, start: float, end: float, word: str, probability: float) -> None:
+            self.start = start
+            self.end = end
+            self.word = word
+            self.probability = probability
+
     class FakeSegment:
-        def __init__(self, start: float, end: float, text: str) -> None:
+        def __init__(self, start: float, end: float, text: str, words) -> None:
             self.start = start
             self.end = end
             self.text = text
+            self.words = words
 
     class FakeModel:
         def __init__(self) -> None:
             self.path = None
-            self.hotwords = None
+            self.options = None
 
         def transcribe(self, path: str, **options):
             self.path = path
-            self.hotwords = options.get("hotwords")
+            self.options = options
             info = type("Info", (), {"language": "pl", "duration": 4.0})()
             segments = [
-                FakeSegment(0.0, 1.0, "hej"),
-                FakeSegment(2.5, 4.0, "bot"),
+                FakeSegment(
+                    0.0,
+                    1.0,
+                    "hej",
+                    [FakeWord(0.0, 1.0, "hej", 0.95)],
+                ),
+                FakeSegment(2.5, 4.0, "bot", [FakeWord(2.5, 4.0, "bot", 0.8)]),
             ]
             return iter(segments), info
 
@@ -205,7 +237,9 @@ def test_engine_reports_progress_and_deletes_extracted_audio(tmp_path: Path, mon
 
     assert result.text == "hej bot"
     assert model.path == str(extracted)
-    assert model.hotwords == "TranscriPy"
+    assert model.options["hotwords"] == "TranscriPy"
+    assert model.options["word_timestamps"] is True
+    assert result.segments[0].words == (Word(0.0, 1.0, "hej", 0.95),)
     assert progress == [(0.25, 1), (1.0, 2), (1.0, 2)]
     assert not extracted.exists()
 
@@ -213,3 +247,4 @@ def test_engine_reports_progress_and_deletes_extracted_audio(tmp_path: Path, mon
 def test_default_compute_type_follows_the_device():
     assert default_compute_type("cpu") == "int8"
     assert default_compute_type("cuda") == "float16"
+    assert DEFAULT_MODEL == "large-v3"

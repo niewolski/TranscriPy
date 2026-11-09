@@ -20,7 +20,7 @@ class RecordingTranscriber:
         self,
         source: str | Path,
         *,
-        model: str = "small",
+        model: str = "large-v3",
         language: str | None = None,
         device: str = "cpu",
         compute_type: str | None = None,
@@ -28,6 +28,8 @@ class RecordingTranscriber:
         initial_prompt: str | None = None,
         hotwords: str | None = None,
         speakers: bool = False,
+        channel_labels=("left", "right"),
+        word_timestamps: bool = True,
         on_progress=None,
     ) -> Transcript:
         self.source = Path(source)
@@ -38,6 +40,8 @@ class RecordingTranscriber:
         self.initial_prompt = initial_prompt
         self.hotwords = hotwords
         self.speakers = speakers
+        self.channel_labels = channel_labels
+        self.word_timestamps = word_timestamps
         return Transcript.from_segments(
             [Segment(0.0, 1.5, "cześć")],
             language=language or "pl",

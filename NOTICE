@@ -1,0 +1,15 @@
+TranscriPy
+Copyright (c) 2026 Bartosz Niewolski
+
+This product uses third-party speech models and runtimes:
+
+- OpenAI Whisper model weights, used through faster-whisper / CTranslate2.
+  See https://github.com/openai/whisper and the model cards on Hugging Face.
+- faster-whisper (MIT), https://github.com/SYSTRAN/faster-whisper
+- Optional mono speaker diarization via pyannote.audio and the gated Hugging
+  Face pipelines pyannote/speaker-diarization-3.1 and pyannote/segmentation-3.0.
+  Users must accept those model agreements and set HF_TOKEN before first use.
+  See https://github.com/pyannote/pyannote-audio and the linked model cards.
+
+TranscriPy itself does not redistribute those model weights; they are downloaded
+on first use under each project's own terms.

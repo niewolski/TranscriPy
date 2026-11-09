@@ -8,16 +8,19 @@ import sys
 from pathlib import Path
 
 from transcripy.models import Transcript
-from transcripy.transcribe import transcribe
+from transcripy.transcribe import DEFAULT_MODEL, transcribe
 
 _FORMATS = ("txt", "srt", "vtt", "json")
 
 
 def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
-    """Transcribe one file and print it or write it to ``--output``."""
+    """Transcribe one call recording and print it or write it to ``--output``."""
     parser = argparse.ArgumentParser(
         prog="transcripy",
-        description="Transcribe a voicebot recording, audio file, or video soundtrack.",
+        description=(
+            "Transcribe a voicebot call, phone recording, or meeting soundtrack "
+            "into timed turns with optional speaker labels."
+        ),
     )
     parser.add_argument("source", help="audio or video file")
     parser.add_argument(
@@ -26,7 +29,11 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
         help="file to write; the extension picks txt, srt, vtt, or json",
     )
     parser.add_argument("--language", help="ISO language code, for example pl")
-    parser.add_argument("--model", default="small", help="Whisper model name")
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help=f"Whisper model name (default: {DEFAULT_MODEL})",
+    )
     parser.add_argument("--device", default="cpu", help="cpu or cuda")
     parser.add_argument("--prompt", help="words the recording is likely to contain")
     parser.add_argument("--hotwords", help="names or phrases to bias recognition toward")
@@ -34,6 +41,16 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
         "--speakers",
         action="store_true",
         help="label stereo channels, or separate voices on a mono recording",
+    )
+    parser.add_argument(
+        "--channel-labels",
+        default="left,right",
+        help="comma-separated stereo channel names (default: left,right)",
+    )
+    parser.add_argument(
+        "--no-word-timestamps",
+        action="store_true",
+        help="skip per-word timings to speed up transcription a little",
     )
     parser.add_argument(
         "--pause",
@@ -50,6 +67,12 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
 
     if args.pause < 0:
         print("pause must be >= 0", file=sys.stderr)
+        return 1
+
+    try:
+        channel_labels = _parse_channel_labels(args.channel_labels)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
         return 1
 
     try:
@@ -80,9 +103,11 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
             initial_prompt=args.prompt,
             hotwords=args.hotwords,
             speakers=args.speakers,
+            channel_labels=channel_labels,
+            word_timestamps=not args.no_word_timestamps,
             on_progress=on_progress,
         )
-    except (FileNotFoundError, RuntimeError) as exc:
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
         if reported:
             print(file=sys.stderr)
         print(exc, file=sys.stderr)
@@ -102,6 +127,15 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
         print(exc, file=sys.stderr)
         return 1
     return 0
+
+
+def _parse_channel_labels(raw: str) -> tuple[str, str]:
+    parts = [part.strip() for part in raw.split(",")]
+    if len(parts) != 2 or not all(parts):
+        raise ValueError(
+            "channel labels must be two non-empty names, for example agent,customer"
+        )
+    return parts[0], parts[1]
 
 
 def choose_format(output: str | None, explicit: str | None) -> str:

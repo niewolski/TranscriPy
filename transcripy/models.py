@@ -6,6 +6,24 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class Word:
+    """One timed word inside a segment."""
+
+    start: float
+    end: float
+    word: str
+    probability: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.start < 0:
+            raise ValueError("word start must be >= 0")
+        if self.end < self.start:
+            raise ValueError("word end is before start")
+        if not self.word.strip():
+            raise ValueError("word text is required")
+
+
+@dataclass(frozen=True)
 class Segment:
     """One stretch of speech with start and end in seconds."""
 
@@ -13,6 +31,7 @@ class Segment:
     end: float
     text: str
     speaker: str | None = None
+    words: tuple[Word, ...] = ()
 
     def __post_init__(self) -> None:
         if self.start < 0:
@@ -56,12 +75,23 @@ class Transcript:
             text = segment.text.strip()
             if not text:
                 continue
+            words = tuple(
+                Word(
+                    start=word.start,
+                    end=word.end,
+                    word=word.word.strip(),
+                    probability=word.probability,
+                )
+                for word in segment.words
+                if word.word.strip()
+            )
             cleaned.append(
                 Segment(
                     start=segment.start,
                     end=segment.end,
                     text=text,
                     speaker=segment.speaker,
+                    words=words,
                 )
             )
 
@@ -113,6 +143,15 @@ class Transcript:
                     "end": segment.end,
                     "text": segment.text,
                     "speaker": segment.speaker,
+                    "words": [
+                        {
+                            "start": word.start,
+                            "end": word.end,
+                            "word": word.word,
+                            "probability": word.probability,
+                        }
+                        for word in segment.words
+                    ],
                 }
                 for segment in self.segments
             ],
