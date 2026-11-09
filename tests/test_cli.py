@@ -5,6 +5,7 @@ from pathlib import Path
 
 from transcripy.cli import main
 from transcripy.models import Segment, Transcript
+from transcripy.transcribe import DEFAULT_MODEL
 
 
 class RecordingTranscriber:
@@ -18,7 +19,7 @@ class RecordingTranscriber:
         self,
         source: str | Path,
         *,
-        model: str = "small",
+        model: str = DEFAULT_MODEL,
         language: str | None = None,
         device: str = "cpu",
         compute_type: str | None = None,
@@ -26,6 +27,8 @@ class RecordingTranscriber:
         initial_prompt: str | None = None,
         hotwords: str | None = None,
         speakers: bool = False,
+        channel_labels=("left", "right"),
+        word_timestamps: bool = True,
         on_progress=None,
     ) -> Transcript:
         self.source = source
@@ -35,6 +38,8 @@ class RecordingTranscriber:
         self.initial_prompt = initial_prompt
         self.hotwords = hotwords
         self.speakers = speakers
+        self.channel_labels = channel_labels
+        self.word_timestamps = word_timestamps
         if on_progress is not None and self.initial_prompt:
             on_progress(0.5, 1)
         return Transcript.from_segments(
@@ -139,18 +144,43 @@ def test_prompt_is_forwarded_and_progress_is_printed(tmp_path: Path, capsys):
     assert recorder.initial_prompt == "TranscriPy"
     assert recorder.hotwords == "Niewolski"
     assert recorder.speakers is False
+    assert recorder.model == DEFAULT_MODEL
+    assert recorder.word_timestamps is True
     assert "50%  1 segments" in capsys.readouterr().err
 
 
-def test_speakers_flag_is_forwarded(tmp_path: Path):
+def test_speakers_and_channel_labels_are_forwarded(tmp_path: Path):
     source = tmp_path / "call.wav"
     source.write_bytes(b"wav")
     recorder = RecordingTranscriber()
 
-    code = main([str(source), "--speakers"], transcriber=recorder)
+    code = main(
+        [
+            str(source),
+            "--speakers",
+            "--channel-labels",
+            "agent,customer",
+            "--no-word-timestamps",
+        ],
+        transcriber=recorder,
+    )
 
     assert code == 0
     assert recorder.speakers is True
+    assert recorder.channel_labels == ("agent", "customer")
+    assert recorder.word_timestamps is False
+
+
+def test_bad_channel_labels_fail(tmp_path: Path, capsys):
+    source = tmp_path / "call.wav"
+    source.write_bytes(b"wav")
+    recorder = RecordingTranscriber()
+
+    code = main([str(source), "--channel-labels", "only-one"], transcriber=recorder)
+
+    assert code == 1
+    assert recorder.source is None
+    assert "channel labels" in capsys.readouterr().err
 
 
 def test_module_help_runs():
@@ -162,4 +192,4 @@ def test_module_help_runs():
     )
 
     assert result.returncode == 0
-    assert "video soundtrack" in result.stdout
+    assert "voicebot call" in result.stdout

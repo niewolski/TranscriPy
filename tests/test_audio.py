@@ -97,6 +97,29 @@ def test_stereo_recording_extracts_both_channels(tmp_path: Path):
         path.unlink()
 
 
+def test_stereo_recording_uses_custom_labels(tmp_path: Path):
+    audio = tmp_path / "call.wav"
+    audio.write_bytes(b"stereo")
+
+    def runner(command, capture_output, check):
+        if command[0] == "ffprobe":
+            return SimpleNamespace(returncode=0, stdout=b"2\n", stderr=b"")
+        Path(command[-1]).write_bytes(b"wav")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    split = split_stereo(
+        audio,
+        labels=("agent", "customer"),
+        which=lambda name: name,
+        runner=runner,
+    )
+
+    assert split is not None
+    assert [speaker for speaker, _ in split] == ["agent", "customer"]
+    for _, path in split:
+        path.unlink()
+
+
 def test_separating_speakers_requires_ffmpeg(tmp_path: Path):
     audio = tmp_path / "call.wav"
     audio.write_bytes(b"stereo")

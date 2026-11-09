@@ -1,6 +1,6 @@
 import pytest
 
-from transcripy.models import Segment, Transcript, format_timestamp
+from transcripy.models import Segment, Transcript, Word, format_timestamp
 
 
 def _sample() -> Transcript:
@@ -75,14 +75,49 @@ def test_to_dict():
         "language": "pl",
         "duration": 4.25,
         "segments": [
-            {"start": 0.0, "end": 1.5, "text": "dzień dobry", "speaker": None},
-            {"start": 3.0, "end": 4.25, "text": "tu voicebot", "speaker": None},
+            {
+                "start": 0.0,
+                "end": 1.5,
+                "text": "dzień dobry",
+                "speaker": None,
+                "words": [],
+            },
+            {
+                "start": 3.0,
+                "end": 4.25,
+                "text": "tu voicebot",
+                "speaker": None,
+                "words": [],
+            },
         ],
         "turns": [
             {"start": 0.0, "end": 1.5, "text": "dzień dobry", "speaker": None},
             {"start": 3.0, "end": 4.25, "text": "tu voicebot", "speaker": None},
         ],
     }
+
+
+def test_words_are_kept_on_segments():
+    transcript = Transcript.from_segments(
+        [
+            Segment(
+                0.0,
+                1.0,
+                "dzień dobry",
+                words=(
+                    Word(0.0, 0.4, "dzień", 0.9),
+                    Word(0.4, 1.0, "dobry", 0.8),
+                ),
+            )
+        ],
+        language="pl",
+    )
+
+    assert transcript.segments[0].words[0].word == "dzień"
+    assert transcript.to_dict()["segments"][0]["words"] == [
+        {"start": 0.0, "end": 0.4, "word": "dzień", "probability": 0.9},
+        {"start": 0.4, "end": 1.0, "word": "dobry", "probability": 0.8},
+    ]
 
 
 def test_turns_follow_the_pause():
