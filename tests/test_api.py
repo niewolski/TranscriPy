@@ -27,6 +27,7 @@ class RecordingTranscriber:
         engine: object | None = None,
         initial_prompt: str | None = None,
         hotwords: str | None = None,
+        speakers: bool = False,
         on_progress=None,
     ) -> Transcript:
         self.source = Path(source)
@@ -36,6 +37,7 @@ class RecordingTranscriber:
         self.device = device
         self.initial_prompt = initial_prompt
         self.hotwords = hotwords
+        self.speakers = speakers
         return Transcript.from_segments(
             [Segment(0.0, 1.5, "cześć")],
             language=language or "pl",
@@ -59,8 +61,8 @@ def test_transcribe_upload_returns_json(monkeypatch):
         "text": "cześć",
         "language": "pl",
         "duration": 1.5,
-        "segments": [{"start": 0.0, "end": 1.5, "text": "cześć"}],
-        "turns": [{"start": 0.0, "end": 1.5, "text": "cześć"}],
+        "segments": [{"start": 0.0, "end": 1.5, "text": "cześć", "speaker": None}],
+        "turns": [{"start": 0.0, "end": 1.5, "text": "cześć", "speaker": None}],
     }
     assert recorder.model == "tiny"
     assert recorder.language == "pl"
@@ -83,6 +85,21 @@ def test_transcribe_upload_can_return_subtitles(monkeypatch):
     assert srt.headers["content-type"].startswith("application/x-subrip")
     assert vtt.text.startswith("WEBVTT\n")
     assert text.text == "cześć"
+
+
+def test_speakers_flag_is_forwarded(monkeypatch):
+    recorder = RecordingTranscriber()
+    monkeypatch.setattr("api.routes.transcribe", recorder)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/transcribe",
+        files={"file": ("call.wav", b"stereo", "audio/wav")},
+        data={"speakers": "true"},
+    )
+
+    assert response.status_code == 200
+    assert recorder.speakers is True
 
 
 def test_empty_upload_is_rejected(monkeypatch):

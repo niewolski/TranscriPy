@@ -31,6 +31,11 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
     parser.add_argument("--prompt", help="words the recording is likely to contain")
     parser.add_argument("--hotwords", help="names or phrases to bias recognition toward")
     parser.add_argument(
+        "--speakers",
+        action="store_true",
+        help="label left and right channels on a stereo recording",
+    )
+    parser.add_argument(
         "--pause",
         type=float,
         default=1.0,
@@ -74,6 +79,7 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
             device=args.device,
             initial_prompt=args.prompt,
             hotwords=args.hotwords,
+            speakers=args.speakers,
             on_progress=on_progress,
         )
     except (FileNotFoundError, RuntimeError) as exc:

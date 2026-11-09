@@ -17,6 +17,7 @@ class SegmentResponse(BaseModel):
     start: float
     end: float
     text: str
+    speaker: str | None = None
 
 
 class TurnResponse(BaseModel):
@@ -24,6 +25,7 @@ class TurnResponse(BaseModel):
     start: float
     end: float
     text: str
+    speaker: str | None = None
 
 
 class TranscriptResponse(BaseModel):

@@ -69,6 +69,75 @@ def test_missing_file_raises_before_the_engine_runs(tmp_path: Path):
     assert engine.source is None
 
 
+def test_stereo_recording_labels_each_channel(tmp_path: Path, monkeypatch):
+    source = tmp_path / "call.wav"
+    source.write_bytes(b"stereo")
+    left = tmp_path / "left.wav"
+    right = tmp_path / "right.wav"
+    left.write_bytes(b"L")
+    right.write_bytes(b"R")
+    progress = []
+
+    class ChannelEngine:
+        def __init__(self) -> None:
+            self.sources: list[Path] = []
+
+        def transcribe(self, source: Path, language: str | None = None, **kwargs):
+            self.sources.append(source)
+            if kwargs.get("on_progress") is not None:
+                kwargs["on_progress"](1.0, 1)
+            if source == left:
+                segment = Segment(0.5, 1.2, "lewy")
+            else:
+                segment = Segment(0.0, 0.4, "prawy")
+            return Transcript.from_segments(
+                [segment],
+                language=language or "pl",
+                duration=segment.end,
+            )
+
+    def fake_split(path: Path):
+        assert path == source
+        return [("left", left), ("right", right)]
+
+    monkeypatch.setattr(sys.modules["transcripy.transcribe"], "split_stereo", fake_split)
+    engine = ChannelEngine()
+
+    result = transcribe(
+        source,
+        language="pl",
+        speakers=True,
+        engine=engine,
+        on_progress=lambda fraction, count: progress.append((fraction, count)),
+    )
+
+    assert [(segment.speaker, segment.text) for segment in result.segments] == [
+        ("right", "prawy"),
+        ("left", "lewy"),
+    ]
+    assert result.turns(1.0)[0].speaker == "right"
+    assert engine.sources == [left, right]
+    assert progress == [(0.5, 1), (1.0, 2)]
+    assert not left.exists()
+    assert not right.exists()
+
+
+def test_mono_recording_stays_unlabeled(tmp_path: Path, monkeypatch):
+    source = tmp_path / "call.wav"
+    source.write_bytes(b"mono")
+    engine = FakeEngine()
+    monkeypatch.setattr(
+        sys.modules["transcripy.transcribe"],
+        "split_stereo",
+        lambda path: None,
+    )
+
+    result = transcribe(source, speakers=True, engine=engine)
+
+    assert engine.source == source
+    assert result.segments[0].speaker is None
+
+
 def test_prompt_and_hotwords_reach_the_engine(tmp_path: Path):
     audio = tmp_path / "call.mp3"
     audio.write_bytes(b"audio")

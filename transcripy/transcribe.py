@@ -7,7 +7,7 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from transcripy.audio import prepare_media
+from transcripy.audio import prepare_media, split_stereo
 from transcripy.models import Segment, Transcript
 
 Progress = Callable[[float, int], None]
@@ -40,6 +40,7 @@ def transcribe(
     compute_type: str | None = None,
     initial_prompt: str | None = None,
     hotwords: str | None = None,
+    speakers: bool = False,
     on_progress: Progress | None = None,
     engine: SpeechEngine | None = None,
 ) -> Transcript:
@@ -50,7 +51,8 @@ def transcribe(
     omitted, the model detects the language. ``initial_prompt`` and ``hotwords``
     bias the recognizer toward names and phrases that are likely to be spoken.
     ``on_progress`` receives a fraction from 0 to 1 and the number of segments
-    finished so far.
+    finished so far. ``speakers`` labels a stereo call as ``left`` and ``right``.
+    A mono file is transcribed once, without a speaker label.
     """
     path = Path(source).expanduser()
     if not path.is_file():
@@ -62,12 +64,77 @@ def transcribe(
             device=device,
             compute_type=compute_type or default_compute_type(device),
         )
-    return engine.transcribe(
-        path,
-        language=language,
-        initial_prompt=_blank_to_none(initial_prompt),
-        hotwords=_blank_to_none(hotwords),
-        on_progress=on_progress,
+
+    channels: list[tuple[str | None, Path]] = [(None, path)]
+    temporary: list[Path] = []
+    if speakers:
+        split = split_stereo(path)
+        if split:
+            channels = [(speaker, audio) for speaker, audio in split]
+            temporary = [audio for _, audio in split]
+
+    try:
+        parts: list[Transcript] = []
+        finished = 0
+        weight = 1 / len(channels)
+        for index, (speaker, audio) in enumerate(channels):
+            result = engine.transcribe(
+                audio,
+                language=language,
+                initial_prompt=_blank_to_none(initial_prompt),
+                hotwords=_blank_to_none(hotwords),
+                on_progress=_scale_progress(on_progress, index * weight, weight, finished),
+            )
+            parts.append(_label(result, speaker))
+            finished += len(result.segments)
+        if len(parts) == 1:
+            return parts[0]
+        return _merge(parts)
+    finally:
+        for audio in temporary:
+            audio.unlink(missing_ok=True)
+
+
+def _scale_progress(
+    on_progress: Progress | None,
+    offset: float,
+    weight: float,
+    finished: int,
+) -> Progress | None:
+    if on_progress is None:
+        return None
+
+    def report(fraction: float, count: int) -> None:
+        on_progress(min(offset + fraction * weight, 1.0), finished + count)
+
+    return report
+
+
+def _label(result: Transcript, speaker: str | None) -> Transcript:
+    if speaker is None:
+        return result
+    return Transcript.from_segments(
+        [
+            Segment(
+                start=segment.start,
+                end=segment.end,
+                text=segment.text,
+                speaker=speaker,
+            )
+            for segment in result.segments
+        ],
+        language=result.language,
+        duration=result.duration,
+    )
+
+
+def _merge(parts: list[Transcript]) -> Transcript:
+    segments = [segment for part in parts for segment in part.segments]
+    segments.sort(key=lambda segment: (segment.start, segment.speaker or ""))
+    return Transcript.from_segments(
+        segments,
+        language=parts[0].language,
+        duration=max(part.duration for part in parts),
     )
 
 

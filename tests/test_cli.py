@@ -25,6 +25,7 @@ class RecordingTranscriber:
         engine: object | None = None,
         initial_prompt: str | None = None,
         hotwords: str | None = None,
+        speakers: bool = False,
         on_progress=None,
     ) -> Transcript:
         self.source = source
@@ -33,6 +34,7 @@ class RecordingTranscriber:
         self.device = device
         self.initial_prompt = initial_prompt
         self.hotwords = hotwords
+        self.speakers = speakers
         if on_progress is not None and self.initial_prompt:
             on_progress(0.5, 1)
         return Transcript.from_segments(
@@ -136,7 +138,19 @@ def test_prompt_is_forwarded_and_progress_is_printed(tmp_path: Path, capsys):
     assert code == 0
     assert recorder.initial_prompt == "TranscriPy"
     assert recorder.hotwords == "Niewolski"
+    assert recorder.speakers is False
     assert "50%  1 segments" in capsys.readouterr().err
+
+
+def test_speakers_flag_is_forwarded(tmp_path: Path):
+    source = tmp_path / "call.wav"
+    source.write_bytes(b"wav")
+    recorder = RecordingTranscriber()
+
+    code = main([str(source), "--speakers"], transcriber=recorder)
+
+    assert code == 0
+    assert recorder.speakers is True
 
 
 def test_module_help_runs():

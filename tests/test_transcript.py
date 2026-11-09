@@ -75,12 +75,12 @@ def test_to_dict():
         "language": "pl",
         "duration": 4.25,
         "segments": [
-            {"start": 0.0, "end": 1.5, "text": "dzień dobry"},
-            {"start": 3.0, "end": 4.25, "text": "tu voicebot"},
+            {"start": 0.0, "end": 1.5, "text": "dzień dobry", "speaker": None},
+            {"start": 3.0, "end": 4.25, "text": "tu voicebot", "speaker": None},
         ],
         "turns": [
-            {"start": 0.0, "end": 1.5, "text": "dzień dobry"},
-            {"start": 3.0, "end": 4.25, "text": "tu voicebot"},
+            {"start": 0.0, "end": 1.5, "text": "dzień dobry", "speaker": None},
+            {"start": 3.0, "end": 4.25, "text": "tu voicebot", "speaker": None},
         ],
     }
 
@@ -98,6 +98,21 @@ def test_turns_follow_the_pause():
     assert transcript.turns(1.0)[0].text == "dzień dobry tu voicebot"
     assert transcript.turns(1.0)[1].text == "do widzenia"
     assert len(transcript.turns(3.0)) == 1
+
+
+def test_turns_do_not_cross_speakers():
+    transcript = Transcript.from_segments(
+        [
+            Segment(0.0, 1.0, "cześć", speaker="left"),
+            Segment(1.1, 2.0, "słucham", speaker="right"),
+        ],
+        language="pl",
+    )
+
+    turns = transcript.turns(2.0)
+
+    assert [turn.speaker for turn in turns] == ["left", "right"]
+    assert transcript.to_srt().splitlines()[2] == "[left] cześć"
     with pytest.raises(ValueError):
         transcript.turns(-0.1)
 

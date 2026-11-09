@@ -12,6 +12,7 @@ class Segment:
     start: float
     end: float
     text: str
+    speaker: str | None = None
 
     def __post_init__(self) -> None:
         if self.start < 0:
@@ -27,6 +28,7 @@ class Turn:
     start: float
     end: float
     text: str
+    speaker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,14 @@ class Transcript:
             text = segment.text.strip()
             if not text:
                 continue
-            cleaned.append(Segment(start=segment.start, end=segment.end, text=text))
+            cleaned.append(
+                Segment(
+                    start=segment.start,
+                    end=segment.end,
+                    text=text,
+                    speaker=segment.speaker,
+                )
+            )
 
         if duration is None:
             duration = cleaned[-1].end if cleaned else 0.0
@@ -76,8 +85,10 @@ class Transcript:
 
         grouped: list[list[Segment]] = []
         for segment in self.segments:
-            gap = segment.start - grouped[-1][-1].end if grouped else pause
-            if gap >= pause:
+            previous = grouped[-1][-1] if grouped else None
+            gap = segment.start - previous.end if previous else pause
+            speaker_changed = previous is not None and segment.speaker != previous.speaker
+            if gap >= pause or speaker_changed:
                 grouped.append([])
             grouped[-1].append(segment)
 
@@ -86,6 +97,7 @@ class Transcript:
                 start=segments[0].start,
                 end=segments[-1].end,
                 text=" ".join(segment.text for segment in segments),
+                speaker=segments[0].speaker,
             )
             for segments in grouped
         )
@@ -96,11 +108,21 @@ class Transcript:
             "language": self.language,
             "duration": self.duration,
             "segments": [
-                {"start": segment.start, "end": segment.end, "text": segment.text}
+                {
+                    "start": segment.start,
+                    "end": segment.end,
+                    "text": segment.text,
+                    "speaker": segment.speaker,
+                }
                 for segment in self.segments
             ],
             "turns": [
-                {"start": turn.start, "end": turn.end, "text": turn.text}
+                {
+                    "start": turn.start,
+                    "end": turn.end,
+                    "text": turn.text,
+                    "speaker": turn.speaker,
+                }
                 for turn in self.turns(pause)
             ],
         }
@@ -114,7 +136,7 @@ class Transcript:
                         f"{format_timestamp(segment.start)} --> "
                         f"{format_timestamp(segment.end)}"
                     ),
-                    segment.text,
+                    _cue_text(segment),
                 ]
             )
             for index, segment in enumerate(self.segments, start=1)
@@ -131,7 +153,7 @@ class Transcript:
                         f"{format_timestamp(segment.start, decimal_separator='.')} --> "
                         f"{format_timestamp(segment.end, decimal_separator='.')}"
                     ),
-                    segment.text,
+                    _cue_text(segment),
                 ]
             )
             for segment in self.segments
@@ -140,6 +162,12 @@ class Transcript:
         if body:
             return f"WEBVTT\n\n{body}\n"
         return "WEBVTT\n"
+
+
+def _cue_text(segment: Segment) -> str:
+    if segment.speaker:
+        return f"[{segment.speaker}] {segment.text}"
+    return segment.text
 
 
 def format_timestamp(seconds: float, *, decimal_separator: str = ",") -> str:

@@ -40,6 +40,7 @@ def transcribe_file(
     device: str = Form(default="cpu"),
     prompt: str | None = Form(default=None),
     hotwords: str | None = Form(default=None),
+    speakers: bool = Form(default=False),
     output_format: str = Query(default="json", alias="format"),
     pause: float = Query(default=1.0),
 ) -> TranscriptResponse | PlainTextResponse:
@@ -59,6 +60,7 @@ def transcribe_file(
                 device=device.strip() or "cpu",
                 initial_prompt=_blank_to_none(prompt),
                 hotwords=_blank_to_none(hotwords),
+                speakers=speakers,
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -78,6 +80,7 @@ def create_job(
     device: str = Form(default="cpu"),
     prompt: str | None = Form(default=None),
     hotwords: str | None = Form(default=None),
+    speakers: bool = Form(default=False),
     output_format: str = Query(default="json", alias="format"),
 ) -> JobCreatedResponse:
     """queue a transcription and return while it is still running"""
@@ -94,6 +97,7 @@ def create_job(
         output_format=output_format,
         initial_prompt=_blank_to_none(prompt),
         hotwords=_blank_to_none(hotwords),
+        speakers=speakers,
     )
     return JobCreatedResponse(id=job.id, status="queued")
 

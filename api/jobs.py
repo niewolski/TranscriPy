@@ -23,6 +23,7 @@ class Job:
     device: str
     initial_prompt: str | None = None
     hotwords: str | None = None
+    speakers: bool = False
     error: str | None = None
     result: Transcript | None = None
     progress: float = 0.0
@@ -50,6 +51,7 @@ class JobStore:
         output_format: str,
         initial_prompt: str | None = None,
         hotwords: str | None = None,
+        speakers: bool = False,
     ) -> Job:
         job = Job(
             id=uuid.uuid4().hex,
@@ -60,6 +62,7 @@ class JobStore:
             device=device,
             initial_prompt=initial_prompt,
             hotwords=hotwords,
+            speakers=speakers,
         )
         with self._lock:
             self._jobs[job.id] = job
@@ -85,6 +88,7 @@ class JobStore:
                 device=job.device,
                 initial_prompt=job.initial_prompt,
                 hotwords=job.hotwords,
+                speakers=job.speakers,
                 error=job.error,
                 result=job.result,
                 progress=job.progress,
@@ -105,6 +109,7 @@ class JobStore:
                 device=job.device,
                 initial_prompt=job.initial_prompt,
                 hotwords=job.hotwords,
+                speakers=job.speakers,
                 on_progress=lambda fraction, count: self._set_progress(
                     job_id,
                     fraction,

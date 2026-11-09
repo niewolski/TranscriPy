@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from transcripy.audio import prepare_media
+from transcripy.audio import prepare_media, split_stereo
 
 
 def test_plain_audio_skips_ffmpeg(tmp_path: Path):
@@ -62,3 +62,65 @@ def test_failed_extraction_deletes_the_temporary_wav(tmp_path: Path):
 
     assert created
     assert not created[0].exists()
+
+
+def test_mono_recording_is_not_split(tmp_path: Path):
+    audio = tmp_path / "call.wav"
+    audio.write_bytes(b"mono")
+    commands: list[str] = []
+
+    def runner(command, capture_output, check):
+        commands.append(command[0])
+        return SimpleNamespace(returncode=0, stdout=b"1\n", stderr=b"")
+
+    assert split_stereo(audio, which=lambda name: name, runner=runner) is None
+    assert commands == ["ffprobe"]
+
+
+def test_stereo_recording_extracts_both_channels(tmp_path: Path):
+    audio = tmp_path / "call.wav"
+    audio.write_bytes(b"stereo")
+
+    def runner(command, capture_output, check):
+        if command[0] == "ffprobe":
+            return SimpleNamespace(returncode=0, stdout=b"2\n", stderr=b"")
+        assert "pan=mono|c0=c0" in command or "pan=mono|c0=c1" in command
+        Path(command[-1]).write_bytes(b"wav")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    split = split_stereo(audio, which=lambda name: name, runner=runner)
+
+    assert split is not None
+    assert [speaker for speaker, _ in split] == ["left", "right"]
+    for _, path in split:
+        assert path.read_bytes() == b"wav"
+        path.unlink()
+
+
+def test_separating_speakers_requires_ffmpeg(tmp_path: Path):
+    audio = tmp_path / "call.wav"
+    audio.write_bytes(b"stereo")
+
+    with pytest.raises(RuntimeError, match="separate speakers"):
+        split_stereo(audio, which=lambda name: None)
+
+
+def test_failed_channel_extract_deletes_temporary_files(tmp_path: Path):
+    audio = tmp_path / "call.wav"
+    audio.write_bytes(b"stereo")
+    created: list[Path] = []
+
+    def runner(command, capture_output, check):
+        if command[0] == "ffprobe":
+            return SimpleNamespace(returncode=0, stdout=b"2\n", stderr=b"")
+        path = Path(command[-1])
+        created.append(path)
+        path.write_bytes(b"partial")
+        returncode = 0 if len(created) == 1 else 1
+        return SimpleNamespace(returncode=returncode, stdout=b"", stderr=b"boom\n")
+
+    with pytest.raises(RuntimeError, match="right channel"):
+        split_stereo(audio, which=lambda name: name, runner=runner)
+
+    assert created
+    assert all(not path.exists() for path in created)
