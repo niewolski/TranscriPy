@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
     parser.add_argument(
         "--speakers",
         action="store_true",
-        help="label left and right channels on a stereo recording",
+        help="label stereo channels, or separate voices on a mono recording",
     )
     parser.add_argument(
         "--pause",

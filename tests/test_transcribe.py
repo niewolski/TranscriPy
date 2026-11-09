@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from transcripy.diarize import SpeakerSpan
 from transcripy.models import Segment, Transcript
 from transcripy.transcribe import FasterWhisperEngine, default_compute_type, transcribe
 
@@ -122,20 +123,25 @@ def test_stereo_recording_labels_each_channel(tmp_path: Path, monkeypatch):
     assert not right.exists()
 
 
-def test_mono_recording_stays_unlabeled(tmp_path: Path, monkeypatch):
+def test_mono_recording_uses_the_diarizer(tmp_path: Path, monkeypatch):
     source = tmp_path / "call.wav"
     source.write_bytes(b"mono")
     engine = FakeEngine()
+    seen: list[Path] = []
     monkeypatch.setattr(
         sys.modules["transcripy.transcribe"],
         "split_stereo",
         lambda path: None,
     )
 
-    result = transcribe(source, speakers=True, engine=engine)
+    def diarizer(path: Path):
+        seen.append(path)
+        return [SpeakerSpan(0.0, 2.0, "SPEAKER_00")]
 
-    assert engine.source == source
-    assert result.segments[0].speaker is None
+    result = transcribe(source, speakers=True, engine=engine, diarizer=diarizer)
+
+    assert seen == [source]
+    assert result.segments[0].speaker == "SPEAKER_00"
 
 
 def test_prompt_and_hotwords_reach_the_engine(tmp_path: Path):

@@ -8,9 +8,11 @@ from collections.abc import Callable
 from typing import Any, Protocol
 
 from transcripy.audio import prepare_media, split_stereo
+from transcripy.diarize import SpeakerSpan, assign_speakers, pyannote_speakers
 from transcripy.models import Segment, Transcript
 
 Progress = Callable[[float, int], None]
+Diarizer = Callable[[Path], list[SpeakerSpan]]
 
 _models: dict[tuple[str, str, str], Any] = {}
 _models_lock = threading.Lock()
@@ -43,6 +45,7 @@ def transcribe(
     speakers: bool = False,
     on_progress: Progress | None = None,
     engine: SpeechEngine | None = None,
+    diarizer: Diarizer | None = None,
 ) -> Transcript:
     """Transcribe a voicebot recording, audio file, or video soundtrack.
 
@@ -52,7 +55,8 @@ def transcribe(
     bias the recognizer toward names and phrases that are likely to be spoken.
     ``on_progress`` receives a fraction from 0 to 1 and the number of segments
     finished so far. ``speakers`` labels a stereo call as ``left`` and ``right``.
-    A mono file is transcribed once, without a speaker label.
+    On a mono recording it separates the mixed voices. That path needs
+    pyannote and an ``HF_TOKEN``.
     """
     path = Path(source).expanduser()
     if not path.is_file():
@@ -88,7 +92,11 @@ def transcribe(
             parts.append(_label(result, speaker))
             finished += len(result.segments)
         if len(parts) == 1:
-            return parts[0]
+            result = parts[0]
+            if speakers and channels[0][0] is None:
+                spans = (diarizer or pyannote_speakers)(path)
+                result = assign_speakers(result, spans)
+            return result
         return _merge(parts)
     finally:
         for audio in temporary:
