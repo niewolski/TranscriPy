@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
 from transcripy.audio import prepare_media, split_stereo
 from transcripy.diarize import SpeakerSpan, assign_speakers, pyannote_speakers
-from transcripy.models import Segment, Transcript
+from transcripy.models import Segment, Transcript, Word
 
 Progress = Callable[[float, int], None]
 Diarizer = Callable[[Path], list[SpeakerSpan]]
+DEFAULT_MODEL = "large-v3"
+DEFAULT_CHANNEL_LABELS = ("left", "right")
 
 _models: dict[tuple[str, str, str], Any] = {}
 _models_lock = threading.Lock()
@@ -28,6 +30,7 @@ class SpeechEngine(Protocol):
         *,
         initial_prompt: str | None = None,
         hotwords: str | None = None,
+        word_timestamps: bool = True,
         on_progress: Progress | None = None,
     ) -> Transcript:
         """Transcribe ``source`` and return timed text."""
@@ -36,31 +39,35 @@ class SpeechEngine(Protocol):
 def transcribe(
     source: str | Path,
     *,
-    model: str = "small",
+    model: str = DEFAULT_MODEL,
     language: str | None = None,
     device: str = "cpu",
     compute_type: str | None = None,
     initial_prompt: str | None = None,
     hotwords: str | None = None,
     speakers: bool = False,
+    channel_labels: Sequence[str] = DEFAULT_CHANNEL_LABELS,
+    word_timestamps: bool = True,
     on_progress: Progress | None = None,
     engine: SpeechEngine | None = None,
     diarizer: Diarizer | None = None,
 ) -> Transcript:
-    """Transcribe a voicebot recording, audio file, or video soundtrack.
+    """Transcribe a voicebot call, phone recording, or meeting soundtrack.
 
     The first call for a given model downloads its weights. Later calls reuse
     the loaded model. ``language`` is an ISO code such as ``pl``; when it is
     omitted, the model detects the language. ``initial_prompt`` and ``hotwords``
     bias the recognizer toward names and phrases that are likely to be spoken.
     ``on_progress`` receives a fraction from 0 to 1 and the number of segments
-    finished so far. ``speakers`` labels a stereo call as ``left`` and ``right``.
-    On a mono recording it separates the mixed voices. That path needs
-    pyannote and an ``HF_TOKEN``.
+    finished so far. ``speakers`` labels a stereo call with ``channel_labels``
+    (default ``left`` / ``right``). On a mono recording it separates the mixed
+    voices. That path needs pyannote and an ``HF_TOKEN``.
     """
     path = Path(source).expanduser()
     if not path.is_file():
         raise FileNotFoundError(f"media file not found: {path}")
+
+    labels = _normalize_channel_labels(channel_labels)
 
     if engine is None:
         engine = FasterWhisperEngine(
@@ -72,7 +79,7 @@ def transcribe(
     channels: list[tuple[str | None, Path]] = [(None, path)]
     temporary: list[Path] = []
     if speakers:
-        split = split_stereo(path)
+        split = split_stereo(path, labels=labels)
         if split:
             channels = [(speaker, audio) for speaker, audio in split]
             temporary = [audio for _, audio in split]
@@ -87,6 +94,7 @@ def transcribe(
                 language=language,
                 initial_prompt=_blank_to_none(initial_prompt),
                 hotwords=_blank_to_none(hotwords),
+                word_timestamps=word_timestamps,
                 on_progress=_scale_progress(on_progress, index * weight, weight, finished),
             )
             parts.append(_label(result, speaker))
@@ -101,6 +109,13 @@ def transcribe(
     finally:
         for audio in temporary:
             audio.unlink(missing_ok=True)
+
+
+def _normalize_channel_labels(channel_labels: Sequence[str]) -> tuple[str, str]:
+    labels = tuple(label.strip() for label in channel_labels)
+    if len(labels) != 2 or not all(labels):
+        raise ValueError("channel_labels must be two non-empty names, for example ('agent', 'customer')")
+    return labels[0], labels[1]
 
 
 def _scale_progress(
@@ -128,6 +143,7 @@ def _label(result: Transcript, speaker: str | None) -> Transcript:
                 end=segment.end,
                 text=segment.text,
                 speaker=speaker,
+                words=segment.words,
             )
             for segment in result.segments
         ],
@@ -165,7 +181,7 @@ class FasterWhisperEngine:
 
     def __init__(
         self,
-        model_name: str = "small",
+        model_name: str = DEFAULT_MODEL,
         device: str = "cpu",
         compute_type: str = "int8",
         model: Any | None = None,
@@ -183,11 +199,16 @@ class FasterWhisperEngine:
         *,
         initial_prompt: str | None = None,
         hotwords: str | None = None,
+        word_timestamps: bool = True,
         on_progress: Progress | None = None,
     ) -> Transcript:
         prepared, temporary = prepare_media(source)
         try:
-            options: dict[str, Any] = {"language": language, "vad_filter": True}
+            options: dict[str, Any] = {
+                "language": language,
+                "vad_filter": True,
+                "word_timestamps": word_timestamps,
+            }
             if initial_prompt:
                 options["initial_prompt"] = initial_prompt
             if hotwords:
@@ -197,8 +218,30 @@ class FasterWhisperEngine:
             duration = float(duration) if duration is not None else 0.0
             segments: list[Segment] = []
             for index, segment in enumerate(segments_iter, start=1):
+                words = ()
+                if word_timestamps:
+                    raw_words = getattr(segment, "words", None) or ()
+                    words = tuple(
+                        Word(
+                            start=float(word.start),
+                            end=float(word.end),
+                            word=str(word.word),
+                            probability=(
+                                float(word.probability)
+                                if getattr(word, "probability", None) is not None
+                                else None
+                            ),
+                        )
+                        for word in raw_words
+                        if str(getattr(word, "word", "")).strip()
+                    )
                 segments.append(
-                    Segment(start=segment.start, end=segment.end, text=segment.text)
+                    Segment(
+                        start=segment.start,
+                        end=segment.end,
+                        text=segment.text,
+                        words=words,
+                    )
                 )
                 if on_progress is not None:
                     fraction = segment.end / duration if duration > 0 else 0.0

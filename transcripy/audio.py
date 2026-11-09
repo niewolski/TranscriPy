@@ -68,14 +68,19 @@ def prepare_media(
 def split_stereo(
     source: Path,
     *,
+    labels: tuple[str, str] = ("left", "right"),
     which=shutil.which,
     runner=subprocess.run,
 ) -> list[tuple[str, Path]] | None:
-    """Split a stereo recording into left and right 16 kHz mono files.
+    """Split a stereo recording into two 16 kHz mono files.
 
-    Returns nothing when the soundtrack has one channel. Both returned files
-    are temporary and the caller deletes them.
+    ``labels`` names the first and second channel (for example ``agent`` /
+    ``customer``). Returns nothing when the soundtrack has one channel. Both
+    returned files are temporary and the caller deletes them.
     """
+    if len(labels) != 2 or not all(label.strip() for label in labels):
+        raise ValueError("labels must be two non-empty channel names")
+
     ffmpeg = which("ffmpeg")
     ffprobe = which("ffprobe")
     if not ffmpeg or not ffprobe:
@@ -111,7 +116,7 @@ def split_stereo(
 
     created: list[Path] = []
     try:
-        for index, speaker in enumerate(("left", "right")):
+        for index, speaker in enumerate(labels):
             descriptor, name = tempfile.mkstemp(suffix=".wav")
             os.close(descriptor)
             destination = Path(name)
@@ -144,7 +149,7 @@ def split_stereo(
         for path in created:
             path.unlink(missing_ok=True)
         raise
-    return [("left", created[0]), ("right", created[1])]
+    return [(labels[0], created[0]), (labels[1], created[1])]
 
 
 def _channel_count(stdout: bytes | str) -> int:

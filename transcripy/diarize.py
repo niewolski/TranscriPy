@@ -36,6 +36,7 @@ def assign_speakers(transcript: Transcript, spans: list[SpeakerSpan]) -> Transcr
             end=segment.end,
             text=segment.text,
             speaker=_best_speaker(segment, spans),
+            words=segment.words,
         )
         for segment in transcript.segments
     ]
