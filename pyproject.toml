@@ -11,6 +11,9 @@ dependencies = ["faster-whisper==1.2.1"]
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27,<0.28"]
 
+[project.scripts]
+transcripy = "transcripy.cli:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
