@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from typing import Optional
 
 # base response model
 class MessageResponse(BaseModel):
@@ -26,4 +25,17 @@ class TranscriptResponse(BaseModel):
     language: str
     duration: float
     segments: list[SegmentResponse]
+
+
+class JobCreatedResponse(BaseModel):
+    """accepted transcription job"""
+    id: str
+    status: str
+
+
+class JobStatusResponse(BaseModel):
+    """current state of a transcription job"""
+    id: str
+    status: str
+    error: str | None = None
 

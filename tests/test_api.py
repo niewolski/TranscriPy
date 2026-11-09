@@ -1,7 +1,10 @@
+import threading
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from api.jobs import JobStore
 from main import app
 from transcripy.models import Segment, Transcript
 
@@ -99,3 +102,94 @@ def test_unknown_format_is_rejected():
 
     assert response.status_code == 400
     assert response.json()["detail"] == "format must be json, txt, srt, or vtt"
+
+
+def test_job_returns_before_transcription_finishes(monkeypatch):
+    release = threading.Event()
+    recorder = RecordingTranscriber()
+
+    def slow(*args, **kwargs):
+        release.wait(2)
+        return recorder(*args, **kwargs)
+
+    monkeypatch.setattr("api.routes.jobs", JobStore(slow))
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/jobs?format=srt",
+        files={"file": ("film.mp4", b"video", "video/mp4")},
+        data={"language": "pl", "model": "tiny", "device": "cpu"},
+    )
+
+    assert response.status_code == 202
+    job_id = response.json()["id"]
+    assert response.json()["status"] == "queued"
+    assert client.get(f"/api/v1/jobs/{job_id}").json()["status"] in {"queued", "running"}
+    assert client.get(f"/api/v1/jobs/{job_id}/result").status_code == 409
+
+    release.set()
+    finished = _wait_for_job(client, job_id)
+
+    assert finished["status"] == "done"
+    assert finished["error"] is None
+    result = client.get(f"/api/v1/jobs/{job_id}/result")
+    assert result.status_code == 200
+    assert result.text == "1\n00:00:00,000 --> 00:00:01,500\ncześć\n"
+    assert recorder.model == "tiny"
+    assert recorder.language == "pl"
+    assert recorder.source is not None
+    assert not recorder.source.exists()
+
+
+def test_failed_job_reports_the_error_and_deletes_the_file(monkeypatch):
+    seen: dict[str, Path] = {}
+
+    def fail(source, **kwargs):
+        seen["path"] = Path(source)
+        raise RuntimeError("model missing")
+
+    monkeypatch.setattr("api.routes.jobs", JobStore(fail))
+    client = TestClient(app)
+    created = client.post(
+        "/api/v1/jobs",
+        files={"file": ("call.mp3", b"audio", "audio/mpeg")},
+    )
+    job_id = created.json()["id"]
+    finished = _wait_for_job(client, job_id)
+
+    assert finished["status"] == "failed"
+    assert finished["error"] == "model missing"
+    result = client.get(f"/api/v1/jobs/{job_id}/result")
+    assert result.status_code == 500
+    assert result.json()["detail"] == "model missing"
+    assert not seen["path"].exists()
+
+
+def test_unknown_job_is_not_found():
+    client = TestClient(app)
+
+    assert client.get("/api/v1/jobs/missing").status_code == 404
+    assert client.get("/api/v1/jobs/missing/result").status_code == 404
+
+
+def test_job_rejects_an_empty_file(monkeypatch):
+    monkeypatch.setattr("api.routes.jobs", JobStore(RecordingTranscriber()))
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/jobs",
+        files={"file": ("call.mp3", b"", "audio/mpeg")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "file is empty"
+
+
+def _wait_for_job(client: TestClient, job_id: str) -> dict:
+    last = {}
+    for _ in range(100):
+        last = client.get(f"/api/v1/jobs/{job_id}").json()
+        if last["status"] in {"done", "failed"}:
+            return last
+        time.sleep(0.01)
+    raise AssertionError(last)
