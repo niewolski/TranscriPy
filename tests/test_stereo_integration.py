@@ -79,9 +79,9 @@ def test_transcribe_labels_stereo_channels_with_hotword_contract(
 
     class ChannelEngine:
         def transcribe(self, audio: Path, language: str | None = None, **kwargs):
-            assert language == "pl"
-            assert kwargs["hotwords"] == "TranscriPy, Niewolski"
-            assert kwargs["initial_prompt"] == "Rozmowa o produkcie TranscriPy."
+            assert language == "en"
+            assert kwargs["hotwords"] == "TranscriPy, Acme"
+            assert kwargs["initial_prompt"] == "A call about the TranscriPy product."
             assert kwargs["word_timestamps"] is True
             # Identify channel by reading which temporary file we got after split.
             with wave.open(str(audio), "rb") as handle:
@@ -89,13 +89,13 @@ def test_transcribe_labels_stereo_channels_with_hotword_contract(
             # Order follows channel_labels: agent then customer.
             label = "agent" if not seen else "customer"
             if label == "agent":
-                segment = Segment(0.05, 0.2, "dzień dobry z TranscriPy")
+                segment = Segment(0.05, 0.2, "hello from TranscriPy")
             else:
-                segment = Segment(0.0, 0.15, "słucham Niewolski")
+                segment = Segment(0.0, 0.15, "listening Acme")
             seen.append((label, segment.text))
             return Transcript.from_segments(
                 [segment],
-                language="pl",
+                language="en",
                 duration=0.25,
             )
 
@@ -107,16 +107,16 @@ def test_transcribe_labels_stereo_channels_with_hotword_contract(
 
     result = transcribe(
         source,
-        language="pl",
+        language="en",
         speakers=True,
         channel_labels=("agent", "customer"),
-        hotwords="TranscriPy, Niewolski",
-        initial_prompt="Rozmowa o produkcie TranscriPy.",
+        hotwords="TranscriPy, Acme",
+        initial_prompt="A call about the TranscriPy product.",
         engine=ChannelEngine(),
     )
 
     assert [segment.speaker for segment in result.segments] == ["customer", "agent"]
     assert "TranscriPy" in result.text
-    assert "Niewolski" in result.text
+    assert "Acme" in result.text
     turns = result.turns(pause=1.0)
     assert {turn.speaker for turn in turns} == {"agent", "customer"}

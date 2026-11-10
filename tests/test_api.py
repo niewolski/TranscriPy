@@ -43,8 +43,8 @@ class RecordingTranscriber:
         self.channel_labels = channel_labels
         self.word_timestamps = word_timestamps
         return Transcript.from_segments(
-            [Segment(0.0, 1.5, "cześć")],
-            language=language or "pl",
+            [Segment(0.0, 1.5, "hello")],
+            language=language or "en",
             duration=1.5,
         )
 
@@ -57,19 +57,19 @@ def test_transcribe_upload_returns_json(monkeypatch):
     response = client.post(
         "/api/v1/transcribe",
         files={"file": ("call.mp3", b"not-real-audio", "audio/mpeg")},
-        data={"language": "pl", "model": "tiny", "device": "cpu"},
+        data={"language": "en", "model": "tiny", "device": "cpu"},
     )
 
     assert response.status_code == 200
     assert response.json() == {
-        "text": "cześć",
-        "language": "pl",
+        "text": "hello",
+        "language": "en",
         "duration": 1.5,
-        "segments": [{"start": 0.0, "end": 1.5, "text": "cześć", "speaker": None}],
-        "turns": [{"start": 0.0, "end": 1.5, "text": "cześć", "speaker": None}],
+        "segments": [{"start": 0.0, "end": 1.5, "text": "hello", "speaker": None}],
+        "turns": [{"start": 0.0, "end": 1.5, "text": "hello", "speaker": None}],
     }
     assert recorder.model == "tiny"
-    assert recorder.language == "pl"
+    assert recorder.language == "en"
     assert recorder.device == "cpu"
     assert recorder.source is not None
     assert not recorder.source.exists()
@@ -85,10 +85,10 @@ def test_transcribe_upload_can_return_subtitles(monkeypatch):
     text = client.post("/api/v1/transcribe?format=txt", files=upload)
 
     assert srt.status_code == 200
-    assert srt.text == "1\n00:00:00,000 --> 00:00:01,500\ncześć\n"
+    assert srt.text == "1\n00:00:00,000 --> 00:00:01,500\nhello\n"
     assert srt.headers["content-type"].startswith("application/x-subrip")
     assert vtt.text.startswith("WEBVTT\n")
-    assert text.text == "cześć"
+    assert text.text == "hello"
 
 
 def test_speakers_flag_is_forwarded(monkeypatch):
@@ -149,7 +149,7 @@ def test_job_returns_before_transcription_finishes(monkeypatch):
     response = client.post(
         "/api/v1/jobs?format=srt",
         files={"file": ("film.mp4", b"video", "video/mp4")},
-        data={"language": "pl", "model": "tiny", "device": "cpu"},
+        data={"language": "en", "model": "tiny", "device": "cpu"},
     )
 
     assert response.status_code == 202
@@ -171,9 +171,9 @@ def test_job_returns_before_transcription_finishes(monkeypatch):
     assert finished["segments_done"] == 1
     result = client.get(f"/api/v1/jobs/{job_id}/result")
     assert result.status_code == 200
-    assert result.text == "1\n00:00:00,000 --> 00:00:01,500\ncześć\n"
+    assert result.text == "1\n00:00:00,000 --> 00:00:01,500\nhello\n"
     assert recorder.model == "tiny"
-    assert recorder.language == "pl"
+    assert recorder.language == "en"
     assert recorder.source is not None
     assert not recorder.source.exists()
 

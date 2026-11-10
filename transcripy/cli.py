@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None, *, transcriber=transcribe) -> int:
         "--output",
         help="file to write; the extension picks txt, srt, vtt, or json",
     )
-    parser.add_argument("--language", help="ISO language code, for example pl")
+    parser.add_argument("--language", help="ISO language code, for example en")
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,

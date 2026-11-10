@@ -11,11 +11,11 @@ from transcripy import transcribe
 
 result = transcribe(
     "call.wav",
-    language="pl",
+    language="en",
     speakers=True,
     channel_labels=("agent", "customer"),
-    hotwords="TranscriPy, Niewolski",
-    initial_prompt="Rozmowa z voicebotem o produkcie TranscriPy.",
+    hotwords="TranscriPy, Acme",
+    initial_prompt="A voicebot call about the TranscriPy product.",
 )
 
 for turn in result.turns():
@@ -24,11 +24,11 @@ for turn in result.turns():
 
 ```bash
 transcripy call.wav \
-  --language pl \
+  --language en \
   --speakers \
   --channel-labels agent,customer \
-  --hotwords "TranscriPy, Niewolski" \
-  --prompt "Rozmowa z voicebotem o produkcie TranscriPy." \
+  --hotwords "TranscriPy, Acme" \
+  --prompt "A voicebot call about the TranscriPy product." \
   -o call.json
 ```
 
@@ -67,7 +67,7 @@ pip install "transcripy[diarize]"
 | Setting | Default | Notes |
 | --- | --- | --- |
 | `model` | `large-v3` | Pass a smaller Whisper name (`medium`, `small`, `tiny`) to trade quality for speed |
-| `language` | auto-detect | Prefer an ISO code such as `pl` for call center audio |
+| `language` | auto-detect | Prefer an ISO code such as `en` or `pl` for call center audio |
 | `word_timestamps` | on | Disable with `--no-word-timestamps` / `word_timestamps=False` |
 | `device` | `cpu` | Use `cuda` when a GPU is available |
 

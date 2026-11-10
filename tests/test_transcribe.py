@@ -34,8 +34,8 @@ class FakeEngine:
         self.hotwords = hotwords
         self.word_timestamps = word_timestamps
         return Transcript.from_segments(
-            [Segment(0.0, 1.2, "cześć")],
-            language=language or "pl",
+            [Segment(0.0, 1.2, "hello")],
+            language=language or "en",
             duration=1.2,
         )
 
@@ -45,11 +45,11 @@ def test_transcribe_reads_a_file_through_the_engine(tmp_path: Path):
     audio.write_bytes(b"not-real-audio")
     engine = FakeEngine()
 
-    result = transcribe(audio, language="pl", engine=engine)
+    result = transcribe(audio, language="en", engine=engine)
 
     assert engine.source == audio
-    assert engine.language == "pl"
-    assert result.text == "cześć"
+    assert engine.language == "en"
+    assert result.text == "hello"
     assert result.segments[0].end == 1.2
 
 
@@ -95,12 +95,12 @@ def test_stereo_recording_labels_each_channel(tmp_path: Path, monkeypatch):
             if kwargs.get("on_progress") is not None:
                 kwargs["on_progress"](1.0, 1)
             if source == left:
-                segment = Segment(0.5, 1.2, "lewy")
+                segment = Segment(0.5, 1.2, "left channel")
             else:
-                segment = Segment(0.0, 0.4, "prawy")
+                segment = Segment(0.0, 0.4, "right channel")
             return Transcript.from_segments(
                 [segment],
-                language=language or "pl",
+                language=language or "en",
                 duration=segment.end,
             )
 
@@ -114,7 +114,7 @@ def test_stereo_recording_labels_each_channel(tmp_path: Path, monkeypatch):
 
     result = transcribe(
         source,
-        language="pl",
+        language="en",
         speakers=True,
         channel_labels=("agent", "customer"),
         engine=engine,
@@ -122,8 +122,8 @@ def test_stereo_recording_labels_each_channel(tmp_path: Path, monkeypatch):
     )
 
     assert [(segment.speaker, segment.text) for segment in result.segments] == [
-        ("customer", "prawy"),
-        ("agent", "lewy"),
+        ("customer", "right channel"),
+        ("agent", "left channel"),
     ]
     assert result.turns(1.0)[0].speaker == "customer"
     assert engine.sources == [left, right]
@@ -170,12 +170,12 @@ def test_prompt_and_hotwords_reach_the_engine(tmp_path: Path):
         audio,
         engine=engine,
         initial_prompt="  TranscriPy  ",
-        hotwords="Niewolski",
+        hotwords="Acme",
         word_timestamps=False,
     )
 
     assert engine.initial_prompt == "TranscriPy"
-    assert engine.hotwords == "Niewolski"
+    assert engine.hotwords == "Acme"
     assert engine.word_timestamps is False
 
 
@@ -208,13 +208,13 @@ def test_engine_reports_progress_and_keeps_word_timings(tmp_path: Path, monkeypa
         def transcribe(self, path: str, **options):
             self.path = path
             self.options = options
-            info = type("Info", (), {"language": "pl", "duration": 4.0})()
+            info = type("Info", (), {"language": "en", "duration": 4.0})()
             segments = [
                 FakeSegment(
                     0.0,
                     1.0,
-                    "hej",
-                    [FakeWord(0.0, 1.0, "hej", 0.95)],
+                    "hey",
+                    [FakeWord(0.0, 1.0, "hey", 0.95)],
                 ),
                 FakeSegment(2.5, 4.0, "bot", [FakeWord(2.5, 4.0, "bot", 0.8)]),
             ]
@@ -230,16 +230,16 @@ def test_engine_reports_progress_and_keeps_word_timings(tmp_path: Path, monkeypa
 
     result = engine.transcribe(
         source,
-        language="pl",
+        language="en",
         hotwords="TranscriPy",
         on_progress=lambda fraction, count: progress.append((fraction, count)),
     )
 
-    assert result.text == "hej bot"
+    assert result.text == "hey bot"
     assert model.path == str(extracted)
     assert model.options["hotwords"] == "TranscriPy"
     assert model.options["word_timestamps"] is True
-    assert result.segments[0].words == (Word(0.0, 1.0, "hej", 0.95),)
+    assert result.segments[0].words == (Word(0.0, 1.0, "hey", 0.95),)
     assert progress == [(0.25, 1), (1.0, 2), (1.0, 2)]
     assert not extracted.exists()
 
