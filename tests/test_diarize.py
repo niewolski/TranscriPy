@@ -9,11 +9,11 @@ from transcripy.models import Segment, Transcript
 def _transcript() -> Transcript:
     return Transcript.from_segments(
         [
-            Segment(0.0, 1.0, "cześć"),
-            Segment(1.2, 3.0, "mówi bot"),
-            Segment(5.0, 5.4, "halo"),
+            Segment(0.0, 1.0, "hello"),
+            Segment(1.2, 3.0, "bot speaking"),
+            Segment(5.0, 5.4, "hey"),
         ],
-        language="pl",
+        language="en",
         duration=5.4,
     )
 

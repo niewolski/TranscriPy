@@ -43,8 +43,8 @@ class RecordingTranscriber:
         if on_progress is not None and self.initial_prompt:
             on_progress(0.5, 1)
         return Transcript.from_segments(
-            [Segment(0.0, 1.5, "cześć")],
-            language=language or "pl",
+            [Segment(0.0, 1.5, "hello")],
+            language=language or "en",
             duration=1.5,
         )
 
@@ -52,19 +52,19 @@ class RecordingTranscriber:
 def test_output_extension_selects_srt(tmp_path: Path):
     source = tmp_path / "film.mp4"
     source.write_bytes(b"video")
-    destination = tmp_path / "napisy.srt"
+    destination = tmp_path / "captions.srt"
     recorder = RecordingTranscriber()
 
     code = main(
-        [str(source), "-o", str(destination), "--language", "pl", "--model", "tiny"],
+        [str(source), "-o", str(destination), "--language", "en", "--model", "tiny"],
         transcriber=recorder,
     )
 
     assert code == 0
     assert destination.read_text(encoding="utf-8") == (
-        "1\n00:00:00,000 --> 00:00:01,500\ncześć\n"
+        "1\n00:00:00,000 --> 00:00:01,500\nhello\n"
     )
-    assert recorder.language == "pl"
+    assert recorder.language == "en"
     assert recorder.model == "tiny"
     assert recorder.device == "cpu"
 
@@ -79,8 +79,8 @@ def test_writes_vtt_txt_and_json(tmp_path: Path):
     assert main([str(source), "-o", str(tmp_path / "a.json")], transcriber=recorder) == 0
 
     assert (tmp_path / "a.vtt").read_text(encoding="utf-8").startswith("WEBVTT\n")
-    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "cześć\n"
-    assert json.loads((tmp_path / "a.json").read_text(encoding="utf-8"))["text"] == "cześć"
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "hello\n"
+    assert json.loads((tmp_path / "a.json").read_text(encoding="utf-8"))["text"] == "hello"
 
 
 def test_prints_text_when_there_is_no_output_file(tmp_path: Path, capsys):
@@ -90,13 +90,13 @@ def test_prints_text_when_there_is_no_output_file(tmp_path: Path, capsys):
     code = main([str(source), "--device", "cuda"], transcriber=RecordingTranscriber())
 
     assert code == 0
-    assert capsys.readouterr().out == "cześć\n"
+    assert capsys.readouterr().out == "hello\n"
 
 
 def test_format_flag_overrides_the_extension(tmp_path: Path):
     source = tmp_path / "call.mp3"
     source.write_bytes(b"audio")
-    destination = tmp_path / "napisy.txt"
+    destination = tmp_path / "captions.txt"
 
     code = main(
         [str(source), "-o", str(destination), "--format", "srt"],
@@ -112,7 +112,7 @@ def test_unknown_extension_fails_before_transcription(tmp_path: Path, capsys):
     source.write_bytes(b"audio")
     recorder = RecordingTranscriber()
 
-    code = main([str(source), "-o", str(tmp_path / "napisy.doc")], transcriber=recorder)
+    code = main([str(source), "-o", str(tmp_path / "captions.doc")], transcriber=recorder)
 
     assert code == 1
     assert recorder.source is None
@@ -121,7 +121,7 @@ def test_unknown_extension_fails_before_transcription(tmp_path: Path, capsys):
 
 def test_missing_file_returns_an_error(tmp_path: Path, capsys):
     missing = tmp_path / "brak.mp3"
-    destination = tmp_path / "napisy.srt"
+    destination = tmp_path / "captions.srt"
 
     code = main([str(missing), "-o", str(destination)])
 
@@ -136,13 +136,13 @@ def test_prompt_is_forwarded_and_progress_is_printed(tmp_path: Path, capsys):
     recorder = RecordingTranscriber()
 
     code = main(
-        [str(source), "--prompt", "TranscriPy", "--hotwords", "Niewolski"],
+        [str(source), "--prompt", "TranscriPy", "--hotwords", "Acme"],
         transcriber=recorder,
     )
 
     assert code == 0
     assert recorder.initial_prompt == "TranscriPy"
-    assert recorder.hotwords == "Niewolski"
+    assert recorder.hotwords == "Acme"
     assert recorder.speakers is False
     assert recorder.model == DEFAULT_MODEL
     assert recorder.word_timestamps is True

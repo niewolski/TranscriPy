@@ -55,7 +55,7 @@ def transcribe(
     """Transcribe a voicebot call, phone recording, or meeting soundtrack.
 
     The first call for a given model downloads its weights. Later calls reuse
-    the loaded model. ``language`` is an ISO code such as ``pl``; when it is
+    the loaded model. ``language`` is an ISO code such as ``en``; when it is
     omitted, the model detects the language. ``initial_prompt`` and ``hotwords``
     bias the recognizer toward names and phrases that are likely to be spoken.
     ``on_progress`` receives a fraction from 0 to 1 and the number of segments
